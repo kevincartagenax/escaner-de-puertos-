@@ -1,0 +1,67 @@
+import socket
+from datetime import datetime
+import argparse
+from scapy.all import sr1, IP, TCP
+
+def scan_ports(target, start_port, end_port):
+    print(f"Escaneando objetivo: {target}")
+    print(f"Hora de inicio: {str(datetime.now())}")
+
+    # Traduce el nombre del host a IPv4
+    target_ip = socket.gethostbyname(target)
+
+    open_ports = []
+
+    # Escaneo de puertos
+    try:
+        for port in range(start_port, end_port + 1):
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            socket.setdefaulttimeout(1)
+            result = s.connect_ex((target_ip, port))
+            if result == 0:
+                open_ports.append(port)
+                service = get_service(target_ip, port)
+                print(f"Puerto {port}: Abierto - Servicio: {service}")
+            s.close()
+    except KeyboardInterrupt:
+        print("\nSaliendo del programa")
+        exit()
+    except socket.gaierror:
+        print("\nNo se pudo resolver el host. Saliendo.")
+        exit()
+    except socket.error:
+        print("\nNo se pudo conectar al servidor. Saliendo.")
+        exit()
+
+    print(f"Hora de finalización: {str(datetime.now())}")
+    return open_ports
+
+def get_service(ip, port):
+    try:
+        pkt = IP(dst=ip)/TCP(dport=port, flags="S")
+        resp = sr1(pkt, timeout=1, verbose=0)
+        if resp and resp.haslayer(TCP):
+            return socket.getservbyport(port, 'tcp')
+    except:
+        return "Desconocido"
+    return "Desconocido"
+
+def write_report(target, open_ports, filename):
+    with open(filename, 'w') as f:
+        f.write(f"Informe de escaneo para: {target}\n")
+        f.write(f"Hora de inicio: {str(datetime.now())}\n\n")
+        for port in open_ports:
+            service = get_service(target, port)
+            f.write(f"Puerto {port}: Abierto - Servicio: {service}\n")
+        f.write(f"\nHora de finalización: {str(datetime.now())}\n")
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Escáner de puertos")
+    parser.add_argument("target", help="La IP o el dominio objetivo")
+    parser.add_argument("start_port", type=int, help="Puerto de inicio del rango")
+    parser.add_argument("end_port", type=int, help="Puerto final del rango")
+    parser.add_argument("report_file", help="Archivo de salida para el informe")
+
+    args = parser.parse_args()
+    open_ports = scan_ports(args.target, args.start_port, args.end_port)
+    write_report(args.target, open_ports, args.report_file)
